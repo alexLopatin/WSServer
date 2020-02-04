@@ -1,9 +1,9 @@
-﻿let socket = new WebSocket("ws://127.0.0.2/Chat");
+﻿let socket = new WebSocket("ws://127.0.0.2/");
 
 socket.onopen = function (e) {
     alert("[open] Соединение установлено");
     alert("Отправляем данные на сервер");
-    socket.send("Меня зовут Джон");
+    //socket.send("Меня зовут Джон");
 };
 
 socket.onmessage = function (event) {
