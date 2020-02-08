@@ -6,6 +6,9 @@ using System.Net.Sockets;
 using System.Text;
 using System.Collections.Generic;
 using System.Security.Cryptography;
+using System.Threading.Tasks;
+using System.Collections;
+using System.Net.Security;
 
 namespace WebSocketServer
 {
@@ -23,10 +26,11 @@ namespace WebSocketServer
         {
             //Console.WriteLine("s");
             StringBuilder str = new StringBuilder();
+            int bytes = 0;
             byte[] dataB = new byte[256];
             do
             {
-                int bytes = stream.Read(dataB, 0, dataB.Length);
+                bytes = stream.Read(dataB, 0, dataB.Length);
                 str.Append(Encoding.UTF8.GetString(dataB, 0, bytes));
             }
 
@@ -47,6 +51,7 @@ namespace WebSocketServer
                 if (brk.Length == 2)
                     data[brk[0]] = brk[1];
             }
+            
             //Console.WriteLine(s);
         }
         public override string ToString()
@@ -68,16 +73,82 @@ namespace WebSocketServer
             set { data[index] = value; }
         }
     }
+    
+    public class Frame
+    {
+        public byte[] message;
+        public byte opCode;
+        public int length;
+        private byte[] Append(byte[] arr, byte[] data, int bytes)
+        {
+            byte[] newArr = new byte[arr.Length + bytes];
+            arr.CopyTo(newArr, 0);
+            for (int i = 0; i < bytes; i++)
+                newArr[i + arr.Length] = data[i];
+            return newArr;
+        }
+        public Frame(NetworkStream stream)
+        {
+            data = new byte[0];
+            byte[] dataB = new byte[256];
+            do
+            {
+                int bytes = stream.Read(dataB, 0, dataB.Length);
+                data = Append(data, dataB, bytes);
+            }
+            while (stream.DataAvailable);
+            Read(data);
+        }
+        public byte[] data;
+        public Frame(string text)
+        {
+            opCode = 1;
+            message = Encoding.UTF8.GetBytes(text);
+            length = message.Length;
+        }
+        public byte[] GetBytes()
+        {
+            byte[] result = new byte[length + 6];
+            result[0] = 129;
+            result[1] = (byte)(length+128);
+            message.CopyTo(result, 6);
+            return result;
+        }
+        private void Read(byte[] bytes)
+        {
+            opCode = (byte)(bytes[0] & 15);
+            length = -128 + bytes[1];
+            byte[] mask = new byte[4] { bytes[2], bytes[3], bytes[4], bytes[5] };
+            message = new byte[length];
+            for (int i = 0; i < length; i++)
+                message[i] = (byte)(bytes[i + 6] ^ mask[i % 4]);
+        }
+    }
+    public class MessageArgs : EventArgs
+    {
+        public Frame frame { get; private set; }
+        public MessageArgs(Frame frame) : base()
+        {
+            this.frame = frame;
+        }
+    }
     class WebSocket
     { 
         TcpListener listener;
         TcpClient client;
-        public WebSocket()
+        public WebSocket(TcpListener listener)
         {
-            IPAddress addr = IPAddress.Parse("127.0.0.2");
-            listener = new TcpListener(addr, 80);
-            listener.Start();
+            this.listener = listener;
+            OnMessageReceived += Test;
         }
+        public void Send(string data)
+        {
+            Frame frame = new Frame(data);
+            byte[] bytes = frame.GetBytes();
+            client.GetStream().Write(bytes, 0, bytes.Length);
+            
+        }
+        public EventHandler<MessageArgs> OnMessageReceived;
         private string AcceptString(string key)
         {
             SHA1Managed sha1 = new SHA1Managed();
@@ -88,8 +159,8 @@ namespace WebSocketServer
         {
             client = listener.AcceptTcpClient();
             Header header = new Header(client.GetStream());
-            if (header["Sec-WebSocket-Version"] != "13" || header["Connection"] != "Upgrade" || header["Upgrade"] != "websocket")
-                client.Close();
+            //if (header["Sec-WebSocket-Version"] != "13" || header["Connection"] != "Upgrade" || header["Upgrade"] != "websocket")
+            //    client.Close();
             Header answer = new Header();
             answer.type = Header.headerType.SWITCH;
             answer["Upgrade"] = "websocket";
@@ -98,18 +169,56 @@ namespace WebSocketServer
             var ansBytes = answer.ToBytes();
             client.GetStream().Write(ansBytes, 0, ansBytes.Length);
         }
+        
+        public void Test(object sender, MessageArgs args)
+        {
+            //if(frame.opCode == 1)
+            {
+                var frame = args.frame;
+                string text = Encoding.UTF8.GetString(args.frame.message);
+                //Send(text + ": message received");
+                //for(int i = 0; i < 50; i++)
+                //Send(text);
+                client.GetStream().Write(frame.data, 0, frame.data.Length);
+            }
+        }
+        
+        public async void ListenAsync()
+        {
+            
+            NetworkStream stream = client.GetStream();
+            while (true)
+            {
+                if(!stream.DataAvailable)
+                {
+                    await Task.Delay(10);
+                    continue;
+                }
+                Frame frame = new Frame(stream);
+                OnMessageReceived.Invoke(this, new MessageArgs(frame));
+            }
+        }
 
     }
     class Server
     {
-        WebSocket ws;
-        public void Run()
+        List<WebSocket> wsockets = new List<WebSocket>();
+        TcpListener listener;
+        public Server()
         {
-            ws = new WebSocket();
-            
+            IPAddress addr = IPAddress.Parse("192.168.1.45");
+            listener = new TcpListener(addr, 80);
+        }
+        public async void Run()
+        {
+            listener.Start();
+
             while (true)
             {
+                WebSocket ws = new WebSocket(listener);
                 ws.AcceptClient();
+                await Task.Run(() => ws.ListenAsync());
+                wsockets.Add(ws);
             }
         }
     }

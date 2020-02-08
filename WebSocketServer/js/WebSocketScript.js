@@ -1,9 +1,9 @@
-﻿let socket = new WebSocket("ws://127.0.0.2/");
+﻿let socket = new WebSocket("ws://192.168.1.45/");
 
 socket.onopen = function (e) {
     alert("[open] Соединение установлено");
-    alert("Отправляем данные на сервер");
-    //socket.send("Меня зовут Джон");
+    //alert("Отправляем данные на сервер");
+    socket.send("Меня зовут Джон");
 };
 
 socket.onmessage = function (event) {
@@ -16,7 +16,7 @@ socket.onclose = function (event) {
     } else {
         // например, сервер убил процесс или сеть недоступна
         // обычно в этом случае event.code 1006
-        alert('[close] Соединение прервано');
+        alert(`[close] Соединение прервано ${event.code}`);
     }
 };
 
