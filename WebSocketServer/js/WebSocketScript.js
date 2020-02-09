@@ -1,4 +1,8 @@
-﻿let socket = new WebSocket("ws://192.168.1.45/");
+﻿let socket = new WebSocket("ws://127.0.0.1/");
+
+document.getElementById("button").onclick = function () {
+    socket.send("buttonClicked");
+}
 
 socket.onopen = function (e) {
     alert("[open] Соединение установлено");
@@ -9,6 +13,7 @@ socket.onopen = function (e) {
 socket.onmessage = function (event) {
     alert(`[message] Данные получены с сервера: ${event.data}`);
 };
+
 
 socket.onclose = function (event) {
     if (event.wasClean) {

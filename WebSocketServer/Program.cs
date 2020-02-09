@@ -24,7 +24,6 @@ namespace WebSocketServer
         }
         public Header(NetworkStream stream)
         {
-            //Console.WriteLine("s");
             StringBuilder str = new StringBuilder();
             int bytes = 0;
             byte[] dataB = new byte[256];
@@ -44,6 +43,8 @@ namespace WebSocketServer
                 type = headerType.POST;
             else
                 type = headerType.GET;
+            
+            
             address = firstSplit[1];
             foreach (string line in lines)
             {
@@ -51,17 +52,15 @@ namespace WebSocketServer
                 if (brk.Length == 2)
                     data[brk[0]] = brk[1];
             }
-            
-            //Console.WriteLine(s);
         }
         public override string ToString()
         {
-            string res = "";
+            StringBuilder res = new StringBuilder();
             if (type == headerType.SWITCH)
-                res += "HTTP/1.1 101 Switching Protocols\r\n";
+                res.Append("HTTP/1.1 101 Switching Protocols\r\n");
             foreach (var kvp in data)
-                res += kvp.Key + ": " + kvp.Value + "\r\n";
-            return res + "\r\n\r\n";
+                res.Append( kvp.Key + ": " + kvp.Value + "\r\n");
+            return res.ToString() + "\r\n";
         }
         public byte[] ToBytes()
         {
@@ -69,7 +68,8 @@ namespace WebSocketServer
         }
         public string this[string index]
         {
-            get { return data[index]; }
+            get { 
+                return data[index]; }
             set { data[index] = value; }
         }
     }
@@ -108,10 +108,10 @@ namespace WebSocketServer
         }
         public byte[] GetBytes()
         {
-            byte[] result = new byte[length + 6];
+            byte[] result = new byte[length + 2];
             result[0] = 129;
-            result[1] = (byte)(length+128);
-            message.CopyTo(result, 6);
+            result[1] = (byte)(length);
+            message.CopyTo(result, 2);
             return result;
         }
         private void Read(byte[] bytes)
@@ -176,10 +176,7 @@ namespace WebSocketServer
             {
                 var frame = args.frame;
                 string text = Encoding.UTF8.GetString(args.frame.message);
-                //Send(text + ": message received");
-                //for(int i = 0; i < 50; i++)
-                //Send(text);
-                client.GetStream().Write(frame.data, 0, frame.data.Length);
+                Send("testString");
             }
         }
         
@@ -206,7 +203,7 @@ namespace WebSocketServer
         TcpListener listener;
         public Server()
         {
-            IPAddress addr = IPAddress.Parse("192.168.1.45");
+            IPAddress addr = IPAddress.Parse("127.0.0.1");
             listener = new TcpListener(addr, 80);
         }
         public async void Run()
