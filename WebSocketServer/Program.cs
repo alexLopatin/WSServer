@@ -68,8 +68,17 @@ namespace WebSocketServer
         }
         public string this[string index]
         {
-            get { 
-                return data[index]; }
+            get 
+            {
+                try
+                {
+                    return data[index];
+                }
+                catch
+                {
+                    return "";
+                }
+            }
             set { data[index] = value; }
         }
     }
@@ -100,17 +109,21 @@ namespace WebSocketServer
             Read(data);
         }
         public byte[] data;
-        public Frame(string text)
+        public Frame(string text, byte opCode)
         {
-            opCode = 1;
+            this.opCode = opCode;
+            
             message = Encoding.UTF8.GetBytes(text);
+            if (opCode == 8)
+                message = Append(new byte[2] { 3, 232 }, message, message.Length);
             length = message.Length;
         }
         public byte[] GetBytes()
         {
             byte[] result = new byte[length + 2];
-            result[0] = 129;
+            result[0] = (byte)(128 + opCode);
             result[1] = (byte)(length);
+
             message.CopyTo(result, 2);
             return result;
         }
@@ -132,6 +145,16 @@ namespace WebSocketServer
             this.frame = frame;
         }
     }
+    public class CloseArgs : EventArgs
+    {
+        public int Code { get; private set; }
+        public string Reason { get; private set; }
+        public CloseArgs(int code, string reason) : base()
+        {
+            Code = code;
+            Reason = reason;
+        }
+    }
     class WebSocket
     { 
         TcpListener listener;
@@ -143,12 +166,19 @@ namespace WebSocketServer
         }
         public void Send(string data)
         {
-            Frame frame = new Frame(data);
+            Frame frame = new Frame(data, 1);
             byte[] bytes = frame.GetBytes();
             client.GetStream().Write(bytes, 0, bytes.Length);
             
         }
+        private void SendClose(string reason)
+        {
+            Frame frame = new Frame(reason, 8);
+            byte[] bytes = frame.GetBytes();
+            client.GetStream().Write(bytes, 0, bytes.Length);
+        }
         public EventHandler<MessageArgs> OnMessageReceived;
+        public EventHandler<CloseArgs> OnClose;
         private string AcceptString(string key)
         {
             SHA1Managed sha1 = new SHA1Managed();
@@ -179,20 +209,47 @@ namespace WebSocketServer
                 Send("testString");
             }
         }
-        
+        private bool ToClose = false;
+        public void Close(string reason)
+        {
+            ToClose = true;
+            closeReason = reason;
+        }
+        int time = 0;
+        string closeReason;
         public async void ListenAsync()
         {
             
             NetworkStream stream = client.GetStream();
             while (true)
             {
-                if(!stream.DataAvailable)
+                if (time > 1000)
+                    Close("timeLimit (10s)");
+                if (ToClose)
                 {
+                    SendClose(closeReason);
+                    if(OnClose != null)
+                    OnClose.Invoke(this, new CloseArgs(1000, closeReason));
+                    await Task.Delay(20);
+                    client.Close();
+                    break;
+                }
+                if (!stream.DataAvailable)
+                {
+                    time += 1;
                     await Task.Delay(10);
                     continue;
                 }
                 Frame frame = new Frame(stream);
-                OnMessageReceived.Invoke(this, new MessageArgs(frame));
+                if(frame.opCode != 8)
+                {
+                    if (OnMessageReceived != null)
+                        OnMessageReceived.Invoke(this, new MessageArgs(frame));
+                }
+                else
+                {
+                    Close(Encoding.UTF8.GetString(frame.message));
+                }
             }
         }
 
@@ -213,7 +270,8 @@ namespace WebSocketServer
             while (true)
             {
                 WebSocket ws = new WebSocket(listener);
-                ws.AcceptClient();
+                ws.AcceptClient();  
+                ws.OnClose += (object sender, CloseArgs args) => { wsockets.Remove(ws); };
                 await Task.Run(() => ws.ListenAsync());
                 wsockets.Add(ws);
             }
@@ -230,7 +288,6 @@ namespace WebSocketServer
                 serv.Run();
             }).Start();
             
-
             //System.Diagnostics.Process.Start(@"cmd.exe ", @"/c StartPage.html");
             Console.ReadKey();
         }

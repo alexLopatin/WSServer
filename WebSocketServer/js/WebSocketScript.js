@@ -3,6 +3,9 @@
 document.getElementById("button").onclick = function () {
     socket.send("buttonClicked");
 }
+document.getElementById("close").onclick = function () {
+    socket.close(1000, "clientClose");
+}
 
 socket.onopen = function (e) {
     alert("[open] Соединение установлено");
