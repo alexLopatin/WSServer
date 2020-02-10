@@ -32,7 +32,6 @@ namespace WebSocketServer
         public WebSocket(TcpListener listener)
         {
             this.listener = listener;
-            OnMessageReceived += Test;
         }
         public void Send(string data)
         {
@@ -68,16 +67,6 @@ namespace WebSocketServer
             answer["Sec-WebSocket-Accept"] = AcceptString(header["Sec-WebSocket-Key"]);
             var ansBytes = answer.ToBytes();
             client.GetStream().Write(ansBytes, 0, ansBytes.Length);
-        }
-
-        public void Test(object sender, MessageArgs args)
-        {
-            //if(frame.opCode == 1)
-            {
-                var frame = args.frame;
-                string text = Encoding.UTF8.GetString(args.frame.message);
-                Send("testString");
-            }
         }
         private bool ToClose = false;
         public void Close(string reason)

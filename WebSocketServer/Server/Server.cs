@@ -7,15 +7,21 @@ using System.Text;
 
 namespace WebSocketServer
 {
-    class Server
+    abstract class Server
     {
-        List<WebSocket> wsockets = new List<WebSocket>();
+        protected List<IUser> ConnectedUsers = new List<IUser>();
         TcpListener listener;
         public Server()
         {
             IPAddress addr = IPAddress.Parse("127.0.0.1");
             listener = new TcpListener(addr, 80);
         }
+        public void SendAll(object message)
+        {
+            foreach (IUser user in ConnectedUsers)
+                user.webSocket.Send(message.ToString());
+        }
+        public abstract void OnWebSocketOpen(WebSocket webSocket);
         public async void Run()
         {
             listener.Start();
@@ -24,9 +30,8 @@ namespace WebSocketServer
             {
                 WebSocket ws = new WebSocket(listener);
                 ws.AcceptClient();
-                ws.OnClose += (object sender, CloseArgs args) => { wsockets.Remove(ws); };
                 await Task.Run(() => ws.ListenAsync());
-                wsockets.Add(ws);
+                OnWebSocketOpen(ws);
             }
         }
     }

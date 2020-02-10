@@ -10,7 +10,7 @@ namespace WebSocketServer
             new Thread( () =>
             {
                 Thread.CurrentThread.IsBackground = true;
-                Server serv = new Server();
+                Server serv = new ChatServer();
                 serv.Run();
             }).Start();
             
