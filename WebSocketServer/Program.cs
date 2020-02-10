@@ -87,7 +87,8 @@ namespace WebSocketServer
     {
         public byte[] message;
         public byte opCode;
-        public int length;
+        public long length;
+        public bool isFin = false;
         private byte[] Append(byte[] arr, byte[] data, int bytes)
         {
             byte[] newArr = new byte[arr.Length + bytes];
@@ -98,17 +99,37 @@ namespace WebSocketServer
         }
         public Frame(NetworkStream stream)
         {
-            data = new byte[0];
-            byte[] dataB = new byte[256];
-            do
+            List<byte> byteList = new List<byte>();
+            byteList.Add((byte)stream.ReadByte());
+            byteList.Add((byte)stream.ReadByte());
+            opCode = (byte)(byteList[0] & 15);
+            isFin = (byteList[0] & 128) != 0;
+            length = -128 + byteList[1];
+            int offset = 0;
+            if (length == 126)
             {
-                int bytes = stream.Read(dataB, 0, dataB.Length);
-                data = Append(data, dataB, bytes);
+                offset = 2;
+                byteList.Add((byte)stream.ReadByte());
+                byteList.Add((byte)stream.ReadByte());
+                length = byteList[2] * 256 + byteList[3];
             }
-            while (stream.DataAvailable);
-            Read(data);
+            else if (length == 127)
+            {
+                offset = 8;
+                for(int i = 0; i < 8; i++)
+                {
+                    byteList.Add((byte)stream.ReadByte());
+                    length += byteList[2 + i] * (1 << (7 - i));
+                }
+            }
+
+            for(int i = 0; i < 4 + length; i++)
+                byteList.Add((byte)stream.ReadByte());
+            byte[] mask = new byte[4] { byteList[2 + offset], byteList[3 + offset], byteList[4 + offset], byteList[5 + offset] };
+            message = new byte[length];
+            for (int i = 0; i < length; i++)
+                message[i] = (byte)(byteList[i + 6 + offset] ^ mask[i % 4]);
         }
-        public byte[] data;
         public Frame(string text, byte opCode)
         {
             this.opCode = opCode;
@@ -126,15 +147,6 @@ namespace WebSocketServer
 
             message.CopyTo(result, 2);
             return result;
-        }
-        private void Read(byte[] bytes)
-        {
-            opCode = (byte)(bytes[0] & 15);
-            length = -128 + bytes[1];
-            byte[] mask = new byte[4] { bytes[2], bytes[3], bytes[4], bytes[5] };
-            message = new byte[length];
-            for (int i = 0; i < length; i++)
-                message[i] = (byte)(bytes[i + 6] ^ mask[i % 4]);
         }
     }
     public class MessageArgs : EventArgs
@@ -230,7 +242,7 @@ namespace WebSocketServer
                     SendClose(closeReason);
                     if(OnClose != null)
                     OnClose.Invoke(this, new CloseArgs(1000, closeReason));
-                    await Task.Delay(20);
+                    await Task.Delay(40);
                     client.Close();
                     break;
                 }
@@ -241,7 +253,8 @@ namespace WebSocketServer
                     continue;
                 }
                 Frame frame = new Frame(stream);
-                if(frame.opCode != 8)
+                //string s = Encoding.UTF8.GetString(frame.message);
+                if (frame.opCode != 8)
                 {
                     if (OnMessageReceived != null)
                         OnMessageReceived.Invoke(this, new MessageArgs(frame));

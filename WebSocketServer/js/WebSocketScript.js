@@ -1,7 +1,7 @@
 ﻿let socket = new WebSocket("ws://127.0.0.1/");
 
 document.getElementById("button").onclick = function () {
-    socket.send("buttonClicked");
+    socket.send("bigMessagebigMessagebigMessagebigMessagebigMessagebigMessagebigMessagebigMessagebigMessagebigMessagebigMessagebigMessagebigMessagebigMessagebigMessagebigMessagebigMessagebigMessagebigMessagebigMessagebigMessagebigMessagebigMessagebigMessagebigMessagebigMessagebigMessagebigMessagebigMessagebigMessagebigMessagebigMessagebigMessagebigMessagebigMessagebigMessage");
 }
 document.getElementById("close").onclick = function () {
     socket.close(1000, "clientClose");
@@ -10,7 +10,7 @@ document.getElementById("close").onclick = function () {
 socket.onopen = function (e) {
     alert("[open] Соединение установлено");
     //alert("Отправляем данные на сервер");
-    socket.send("Меня зовут Джон");
+    //socket.send("Меня зовут Джон");
 };
 
 socket.onmessage = function (event) {
